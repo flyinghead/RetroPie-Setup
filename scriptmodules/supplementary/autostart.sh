@@ -43,7 +43,7 @@ _EOF_
             echo -e "kodi #auto\nemulationstation #auto" >>"$script"
             ;;
         es|*)
-            echo "emulationstation #auto" >>"$script"
+            echo "LANG=fr_FR.UTF-8 emulationstation #auto" >>"$script"
             ;;
     esac
     chown $user:$user "$script"

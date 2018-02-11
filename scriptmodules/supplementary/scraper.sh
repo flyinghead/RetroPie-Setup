@@ -74,6 +74,8 @@ function scrape_scraper() {
     fi
 
     local params=()
+    params+=(-lang "fr")
+    params+=(-region "fr,eu,us,wor,jp,xx")
     params+=(-image_dir "$img_dir")
     params+=(-image_path "$img_path")
     params+=(-video_dir "$img_dir")

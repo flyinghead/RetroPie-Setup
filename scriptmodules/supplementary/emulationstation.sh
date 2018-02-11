@@ -136,8 +136,8 @@ function depends_emulationstation() {
 function sources_emulationstation() {
     local repo="$1"
     local branch="$2"
-    [[ -z "$repo" ]] && repo="https://github.com/RetroPie/EmulationStation"
-    [[ -z "$branch" ]] && branch="stable"
+    [[ -z "$repo" ]] && repo="https://github.com/flyinghead/EmulationStation"
+    [[ -z "$branch" ]] && branch="master"
     gitPullOrClone "$md_build" "$repo" "$branch"
 }
 
@@ -151,6 +151,10 @@ function build_emulationstation() {
 }
 
 function install_emulationstation() {
+    pushd "$md_build"
+    find . -name '*.mo' | cpio -pdm "$md_inst"
+    popd
+    
     md_ret_files=(
         'CREDITS.md'
         'emulationstation'
@@ -158,6 +162,7 @@ function install_emulationstation() {
         'GAMELISTS.md'
         'README.md'
         'THEMES.md'
+	'resources'
     )
 }
 

@@ -130,6 +130,11 @@ function scrape_scraper() {
     trap 'trap 2; return 1' INT
     sudo -u $user "$md_inst/scraper" ${params[@]}
     trap 2
+
+    # Fix xml entities in gamelist.xml
+    mv "$gamelist" "$gamelist.tmp"
+    sed -r 's/&amp;([a-z]+;)/\&\1/g' < "$gamelist.tmp" > "$gamelist" \
+	    || mv "$gamelist.tmp" "$gamelist"
 }
 
 function scrape_all_scraper() {

@@ -1,0 +1,18 @@
+diff --git a/tasks/task_netplay_find_content.c b/tasks/task_netplay_find_content.c
+index 0adb00e..c9aba2b 100644
+--- a/tasks/task_netplay_find_content.c
++++ b/tasks/task_netplay_find_content.c
+@@ -109,6 +109,13 @@ static void netplay_crc_scan_callback(void *task_data,
+       command_event(CMD_EVENT_NETPLAY_INIT_DIRECT, state->hostname);
+       command_event(CMD_EVENT_RESUME, NULL);
+    }
++   /* check current running core */
++   else if (string_is_equal(info->info.library_name, state->core_name))
++   {
++      RARCH_LOG("[lobby] keeping current core %s with current content\n", state->core_name);
++      command_event(CMD_EVENT_NETPLAY_INIT_DIRECT, state->hostname);
++      command_event(CMD_EVENT_RESUME, NULL);
++   }
+    /* no match found */
+    else
+    {

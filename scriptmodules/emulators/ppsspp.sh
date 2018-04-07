@@ -23,7 +23,7 @@ function depends_ppsspp() {
 }
 
 function sources_ppsspp() {
-    gitPullOrClone "$md_build/ppsspp" https://github.com/hrydgard/ppsspp.git v1.5.4
+    gitPullOrClone "$md_build/ppsspp" https://github.com/flyinghead/ppsspp.git v154-changes
     cd ppsspp
 
     applyPatch "$md_data/01_egl_name.diff"

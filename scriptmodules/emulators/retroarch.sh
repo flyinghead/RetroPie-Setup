@@ -37,7 +37,7 @@ function depends_retroarch() {
 }
 
 function sources_retroarch() {
-    gitPullOrClone "$md_build" https://github.com/libretro/RetroArch.git v1.6.9
+    gitPullOrClone "$md_build" https://github.com/libretro/RetroArch.git v1.7.1
     applyPatch "$md_data/01_hotkey_hack.diff"
     applyPatch "$md_data/02_disable_search.diff"
     applyPatch "$md_data/03_netplay_fix.diff"
@@ -101,6 +101,14 @@ function install_xmb_monochrome_assets_retroarch() {
     [[ ! -d "$dir" ]] && mkUserDir "$dir"
     downloadAndExtract "$__archive_url/retroarch-xmb-monochrome.tar.gz" "$dir"
     chown -R $user:$user "$dir"
+}
+
+function _package_xmb_monochrome_assets_retroarch() {
+    gitPullOrClone "$md_build/assets" https://github.com/libretro/retroarch-assets.git
+    mkdir -p "$__tmpdir/archives"
+    local archive="$__tmpdir/archives/retroarch-xmb-monochrome.tar.gz"
+    rm -f "$archive"
+    tar cvzf "$archive" -C "$md_build/assets" xmb/monochrome
 }
 
 function configure_retroarch() {

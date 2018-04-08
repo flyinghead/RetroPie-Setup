@@ -1,8 +1,16 @@
 diff --git a/tasks/task_netplay_find_content.c b/tasks/task_netplay_find_content.c
-index 0adb00e..c9aba2b 100644
+index 0adb00e..4543192 100644
 --- a/tasks/task_netplay_find_content.c
 +++ b/tasks/task_netplay_find_content.c
-@@ -109,6 +109,13 @@ static void netplay_crc_scan_callback(void *task_data,
+@@ -36,6 +36,7 @@
+ #include "../core_info.h"
+ #include "../../retroarch.h"
+ #include "../../menu/menu_driver.h"
++#include "../../paths.h"
+ 
+ typedef struct
+ {
+@@ -109,6 +110,13 @@ static void netplay_crc_scan_callback(void *task_data,
        command_event(CMD_EVENT_NETPLAY_INIT_DIRECT, state->hostname);
        command_event(CMD_EVENT_RESUME, NULL);
     }
@@ -16,3 +24,26 @@ index 0adb00e..c9aba2b 100644
     /* no match found */
     else
     {
+@@ -222,6 +230,22 @@ static void task_netplay_crc_scan_handler(retro_task_t *task)
+       {
+ filename_matching:
+          RARCH_LOG("[lobby] testing filename matching for: %s\n", state->content_path);
++
++	 const char *gamename = !string_is_empty(path_basename(path_get(RARCH_PATH_BASENAME))) ? 
++	    path_basename(path_get(RARCH_PATH_BASENAME)) : "N/A";
++	 RARCH_LOG("[lobby] current content name is %s\n", gamename);
++	 if (string_is_equal(state->content_path, gamename)) {
++            RARCH_LOG("[lobby] current filename match\n");
++
++            state->found = true;
++            task_set_data(task, state);
++            task_set_progress(task, 100);
++            task_free_title(task);
++            task_set_title(task, strdup(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_NETPLAY_COMPAT_CONTENT_FOUND)));
++            task_set_finished(task, true);
++            return;
++	 }
++
+          for (i = 0; i < state->lpl_list->size; i++)
+          {
+             playlist_t *playlist = NULL;

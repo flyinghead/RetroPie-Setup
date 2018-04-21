@@ -41,6 +41,7 @@ function sources_retroarch() {
     applyPatch "$md_data/01_hotkey_hack.diff"
     applyPatch "$md_data/02_disable_search.diff"
     applyPatch "$md_data/03_netplay_fix.diff"
+    applyPatch "$md_data/04_udev_touch.diff"
 }
 
 function build_retroarch() {

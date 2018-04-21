@@ -1,0 +1,313 @@
+diff --git a/input/drivers/udev_input.c b/input/drivers/udev_input.c
+index b7de9b7253..aa7f9ee8ef 100644
+--- a/input/drivers/udev_input.c
++++ b/input/drivers/udev_input.c
+@@ -77,6 +77,7 @@
+ #endif
+ 
+ #define UDEV_MAX_KEYS (KEY_MAX + 7) / 8
++#define UDEV_MAX_TOUCH 5
+ 
+ typedef struct udev_input udev_input_t;
+ 
+@@ -86,7 +87,8 @@ enum udev_input_dev_type
+ {
+    UDEV_INPUT_KEYBOARD = 0,
+    UDEV_INPUT_MOUSE,
+-   UDEV_INPUT_TOUCHPAD
++   UDEV_INPUT_TOUCHPAD,
++   UDEV_INPUT_TOUCHSCREEN
+ };
+ 
+ /* NOTE: must be in sync with enum udev_input_dev_type */
+@@ -94,7 +96,15 @@ static const char *g_dev_type_str[] =
+ {
+    "ID_INPUT_KEYBOARD",
+    "ID_INPUT_MOUSE",
+-   "ID_INPUT_TOUCHPAD"
++   "ID_INPUT_TOUCHPAD",
++   "ID_INPUT_TOUCHSCREEN"
++};
++
++struct input_pointer
++{
++   int16_t x, y;
++   int16_t full_x, full_y;
++   int16_t tracking_id;
+ };
+ 
+ typedef struct
+@@ -108,6 +118,10 @@ typedef struct
+    int32_t x_rel, y_rel;
+    bool l, r, m, b4, b5;
+    bool wu, wd, whu, whd;
++
++   bool touch;
++   struct input_pointer pointer[UDEV_MAX_TOUCH];
++   int32_t current_mt_slot;
+ } udev_input_mouse_t;
+ 
+ struct udev_input_device
+@@ -328,76 +342,6 @@ static int16_t udev_mouse_get_y(const udev_input_mouse_t *mouse)
+    return y + (y < 0 ? -0.5 : 0.5);
+ }
+ 
+-static int16_t udev_mouse_get_pointer_x(const udev_input_mouse_t *mouse, bool screen)
+-{
+-   video_viewport_t vp;
+-   double src_min;
+-   double src_width;
+-   int32_t x;
+-
+-   if (!video_driver_get_viewport_info(&vp))
+-      return 0;
+-
+-   if (mouse->x_min < mouse->x_max) /* mouse coords are absolute */
+-   {
+-      src_min = mouse->x_min;
+-      src_width = mouse->x_max - mouse->x_min + 1;
+-   }
+-   else /* mouse coords are viewport relative */
+-   {
+-      src_min = vp.x;
+-      if (screen)
+-         src_width = vp.full_width;
+-      else
+-         src_width = vp.width;
+-   }
+-
+-   x = -32767.0 + 65535.0 / src_width * (mouse->x_abs - src_min);
+-   x += (x < 0 ? -0.5 : 0.5);
+-
+-   if (x < -0x7fff)
+-      x = -0x7fff;
+-   else if(x > 0x7fff)
+-      x = 0x7fff;
+-
+-   return x;
+-}
+-
+-static int16_t udev_mouse_get_pointer_y(const udev_input_mouse_t *mouse, bool screen)
+-{
+-   video_viewport_t vp;
+-   double src_min;
+-   double src_height;
+-   int32_t y;
+-
+-   if (!video_driver_get_viewport_info(&vp))
+-      return 0;
+-
+-   if (mouse->y_min < mouse->y_max) /* mouse coords are absolute */
+-   {
+-      src_min = mouse->y_min;
+-      src_height = mouse->y_max - mouse->y_min + 1;
+-   }
+-   else /* mouse coords are viewport relative */
+-   {
+-      src_min = vp.y;
+-      if (screen)
+-         src_height = vp.full_height;
+-      else
+-         src_height = vp.height;
+-   }
+-
+-   y = -32767.0 + 65535.0 / src_height * (mouse->y_abs - src_min);
+-   y += (y < 0 ? -0.5 : 0.5);
+-
+-   if (y < -0x7fff)
+-      y = -0x7fff;
+-   else if(y > 0x7fff)
+-      y = 0x7fff;
+-
+-   return y;
+-}
+-
+ static void udev_handle_mouse(void *data,
+       const struct input_event *event, udev_input_device_t *dev)
+ {
+@@ -461,10 +405,45 @@ static void udev_handle_mouse(void *data,
+          switch (event->code)
+          {
+             case ABS_X:
+-               udev_mouse_set_x(mouse, event->value, true);
++               if (!mouse->touch) // FIXME What happens if the touchscreen doesn't support multitouch and only reports ABS_X/Y events?
++                  udev_mouse_set_x(mouse, event->value, true);
+                break;
+             case ABS_Y:
+-               udev_mouse_set_y(mouse, event->value, true);
++               if (!mouse->touch) // FIXME Same
++                  udev_mouse_set_y(mouse, event->value, true);
++               break;
++            case ABS_MT_SLOT:
++               mouse->current_mt_slot = event->value;
++               break;
++            case ABS_MT_TRACKING_ID:
++               if (mouse->current_mt_slot < UDEV_MAX_TOUCH)
++                  mouse->pointer[mouse->current_mt_slot].tracking_id = event->value;
++               break;
++            case ABS_MT_POSITION_X:
++               if (mouse->current_mt_slot < UDEV_MAX_TOUCH) {
++                  struct video_viewport vp;
++                  int16_t dummy;
++                  video_driver_translate_coord_viewport_wrap(
++                        &vp,
++                        event->value, 0,
++                        &mouse->pointer[mouse->current_mt_slot].x,
++                        &dummy,
++                        &mouse->pointer[mouse->current_mt_slot].full_x,
++                        &dummy);
++               }
++               break;
++            case ABS_MT_POSITION_Y:
++               if (mouse->current_mt_slot < UDEV_MAX_TOUCH) {
++                  struct video_viewport vp;
++                  int16_t dummy;
++                  video_driver_translate_coord_viewport_wrap(
++                        &vp,
++                        0, event->value,
++                        &dummy,
++                        &mouse->pointer[mouse->current_mt_slot].y,
++                        &dummy,
++                        &mouse->pointer[mouse->current_mt_slot].full_y);
++               }
+                break;
+          }
+          break;
+@@ -506,7 +485,7 @@ static bool udev_input_add_device(udev_input_t *udev,
+    strlcpy(device->devnode, devnode, sizeof(device->devnode));
+ 
+    /* Touchpads report in absolute coords. */
+-   if (type == UDEV_INPUT_TOUCHPAD)
++   if (type == UDEV_INPUT_TOUCHPAD || type == UDEV_INPUT_TOUCHSCREEN)
+    {
+       if (ioctl(fd, EVIOCGABS(ABS_X), &absinfo) < 0 ||
+             absinfo.minimum >= absinfo.maximum)
+@@ -521,6 +500,9 @@ static bool udev_input_add_device(udev_input_t *udev,
+ 
+       device->mouse.y_min = absinfo.minimum;
+       device->mouse.y_max = absinfo.maximum;
++      device->mouse.touch = true;
++      for (int i = 0; i < UDEV_MAX_TOUCH; i++)
++         device->mouse.pointer[i].tracking_id = -1;
+    }
+    /* UDEV_INPUT_MOUSE may report in absolute coords too */
+    else if (type == UDEV_INPUT_MOUSE && ioctl(fd, EVIOCGABS(ABS_X), &absinfo) >= 0)
+@@ -601,6 +583,7 @@ static void udev_input_handle_hotplug(udev_input_t *udev)
+    const char *val_key               = NULL;
+    const char *val_mouse             = NULL;
+    const char *val_touchpad          = NULL;
++   const char *val_touchscreen       = NULL;
+    const char *action                = NULL;
+    const char *devnode               = NULL;
+    struct udev_device *dev           = udev_monitor_receive_device(
+@@ -612,6 +595,7 @@ static void udev_input_handle_hotplug(udev_input_t *udev)
+    val_key       = udev_device_get_property_value(dev, "ID_INPUT_KEY");
+    val_mouse     = udev_device_get_property_value(dev, "ID_INPUT_MOUSE");
+    val_touchpad  = udev_device_get_property_value(dev, "ID_INPUT_TOUCHPAD");
++   val_touchscreen  = udev_device_get_property_value(dev, "ID_INPUT_TOUCHSCREEN");
+    action        = udev_device_get_action(dev);
+    devnode       = udev_device_get_devnode(dev);
+ 
+@@ -631,6 +615,11 @@ static void udev_input_handle_hotplug(udev_input_t *udev)
+       dev_type   = UDEV_INPUT_TOUCHPAD;
+       cb         = udev_handle_mouse;
+    }
++   else if (val_touchscreen && string_is_equal(val_touchscreen, "1") && devnode)
++   {
++      dev_type   = UDEV_INPUT_TOUCHPAD;
++      cb         = udev_handle_mouse;
++   }
+    else
+       goto end;
+ 
+@@ -813,7 +802,6 @@ static int16_t udev_mouse_state(udev_input_t *udev,
+       unsigned port, unsigned id, bool screen)
+ {
+    udev_input_mouse_t *mouse = udev_get_mouse(udev, port);
+-
+    if (!mouse)
+       return 0;
+ 
+@@ -936,21 +924,23 @@ static int16_t udev_analog_pressed(const struct retro_keybind *binds,
+ }
+ 
+ static int16_t udev_pointer_state(udev_input_t *udev,
+-      unsigned port, unsigned id, bool screen)
++      unsigned port, unsigned idx, unsigned id, bool screen)
+ {
++   if (idx >= UDEV_MAX_TOUCH)
++      return 0;
+    udev_input_mouse_t *mouse = udev_get_mouse(udev, port);
+ 
+-   if (!mouse)
++   if (!mouse || !mouse->touch || mouse->pointer[idx].tracking_id == -1)
+       return 0;
+ 
+    switch (id)
+    {
+       case RETRO_DEVICE_ID_POINTER_X:
+-         return udev_mouse_get_pointer_x(mouse, screen);
++         return screen ? mouse->pointer[idx].full_x : mouse->pointer[idx].x;
+       case RETRO_DEVICE_ID_POINTER_Y:
+-         return udev_mouse_get_pointer_y(mouse, screen);
++         return screen ? mouse->pointer[idx].full_y : mouse->pointer[idx].y;
+       case RETRO_DEVICE_ID_POINTER_PRESSED:
+-         return mouse->l;
++         return 1;
+    }
+ 
+    return 0;
+@@ -987,9 +977,9 @@ static int16_t udev_input_state(void *data,
+          return udev_mouse_state(udev, port, id, true);
+ 
+       case RETRO_DEVICE_POINTER:
+-         return udev_pointer_state(udev, port, id, false);
++         return udev_pointer_state(udev, port, idx, id, false);
+       case RARCH_DEVICE_POINTER_SCREEN:
+-         return udev_pointer_state(udev, port, id, true);
++         return udev_pointer_state(udev, port, idx, id, true);
+ 
+       case RETRO_DEVICE_LIGHTGUN:
+          switch ( id )
+@@ -1196,6 +1186,12 @@ static void *udev_input_init(const char *joypad_driver)
+       goto error;
+    }
+ 
++   if (!open_devices(udev, UDEV_INPUT_TOUCHSCREEN, udev_handle_mouse))
++   {
++      RARCH_ERR("Failed to open touchscreens.\n");
++      goto error;
++   }
++
+    /* If using KMS and we forgot this,
+     * we could lock ourselves out completely. */
+    if (!udev->num_devices)
+@@ -1226,6 +1222,7 @@ static uint64_t udev_input_get_capabilities(void *data)
+       (1 << RETRO_DEVICE_ANALOG)   |
+       (1 << RETRO_DEVICE_KEYBOARD) |
+       (1 << RETRO_DEVICE_MOUSE)    |
++      (1 << RETRO_DEVICE_POINTER)    |
+       (1 << RETRO_DEVICE_LIGHTGUN);
+ }
+ 
+diff --git a/menu/menu_input.c b/menu/menu_input.c
+index 8fdeb4f106..4081b6adba 100644
+--- a/menu/menu_input.c
++++ b/menu/menu_input.c
+@@ -471,10 +471,13 @@ static int menu_input_pointer_post_iterate(
+          pointer_old_y                     = pointer_y;
+          pointer_oldpressed[0]             = true;
+       }
+-      else if (video_context_driver_get_metrics(&metrics))
++      else
+       {
+-         if (abs(pointer_x - start_x) > (dpi / 10)
+-               || abs(pointer_y - start_y) > (dpi / 10))
++         if (!video_context_driver_get_metrics(&metrics))
++            dpi = menu_display_get_dpi();
++         if (dpi > 0
++               && (abs(pointer_x - start_x) > (dpi / 10)
++                   || abs(pointer_y - start_y) > (dpi / 10)))
+          {
+             float s, delta_time;
+ 

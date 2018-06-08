@@ -23,8 +23,16 @@ function depends_ppsspp() {
 }
 
 function sources_ppsspp() {
-    gitPullOrClone "$md_build/ppsspp" https://github.com/flyinghead/ppsspp.git v154-changes
+    if isPlatform "tinker"; then
+        gitPullOrClone "$md_build/ppsspp" https://github.com/hrydgard/ppsspp.git
+    else
+	gitPullOrClone "$md_build/ppsspp" https://github.com/flyinghead/ppsspp.git v154-changes
+    fi
     cd ppsspp
+
+    if isPlatform "tinker"; then
+        applyPatch "$md_data/02_tinker_options.diff"
+    fi
 
     # remove the lines that trigger the ffmpeg build script functions - we will just use the variables from it
     sed -i "/^build_ARMv6$/,$ d" ffmpeg/linux_arm.sh
@@ -121,6 +129,8 @@ function build_ppsspp() {
         fi
     elif isPlatform "mali"; then
         params+=(-DUSING_GLES2=ON -DUSING_FBDEV=ON)
+    elif isPlatform "tinker"; then
+        params+=(-DCMAKE_TOOLCHAIN_FILE="$md_data/tinker.armv7.cmake")
     fi
     "$cmake" "${params[@]}" .
     make clean
@@ -144,6 +154,10 @@ function configure_ppsspp() {
     mkUserDir "$md_conf_root/psp/PSP"
     ln -snf "$romdir/psp" "$md_conf_root/psp/PSP/GAME"
 
-    addEmulator 0 "$md_id" "psp" "$md_inst/PPSSPPSDL %ROM%"
+    if isPlatform "tinker"; then
+        addEmulator 0 "$md_id" "psp" "$md_inst/PPSSPPSDL --fullscreen %ROM%"
+    else
+        addEmulator 0 "$md_id" "psp" "$md_inst/PPSSPPSDL %ROM%"
+    fi
     addSystem "psp"
 }

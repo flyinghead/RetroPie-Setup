@@ -22,19 +22,15 @@ function depends_reicast() {
 }
 
 function sources_reicast() {
-    if isPlatform "x11"; then
-        gitPullOrClone "$md_build" https://github.com/reicast/reicast-emulator.git
-    else
-        gitPullOrClone "$md_build" https://github.com/jonsimantov/reicast-emulator.git retropie
-    fi
+    gitPullOrClone "$md_build" https://github.com/flyinghead/reicast-emulator.git
     sed -i "s/CXXFLAGS += -fno-rtti -fpermissive -fno-operator-names/CXXFLAGS += -fno-rtti -fpermissive -fno-operator-names -D_GLIBCXX_USE_CXX11_ABI=0/g" shell/linux/Makefile
 }
 
 function build_reicast() {
     cd shell/linux
     if isPlatform "rpi"; then
-        make platform=rpi2 clean
-        make platform=rpi2
+        make platform=rpi3 clean
+        make platform=rpi3
     elif isPlatform "tinker"; then
         make USE_GLES=1 USE_SDL=1 clean
         make USE_GLES=1 USE_SDL=1
@@ -48,7 +44,7 @@ function build_reicast() {
 function install_reicast() {
     cd shell/linux
     if isPlatform "rpi"; then
-        make platform=rpi2 PREFIX="$md_inst" install
+        make platform=rpi3 PREFIX="$md_inst" install
     elif isPlatform "tinker"; then
         make USE_GLES=1 USE_SDL=1 PREFIX="$md_inst" install
     else
@@ -79,6 +75,9 @@ function configure_reicast() {
     # copy default mappings
     cp "$md_inst/share/reicast/mappings/"*.cfg "$md_conf_root/dreamcast/mappings/"
 
+    # copy font.png
+    cp "$md_inst/share/pixmaps/font.png" "$md_conf_root/dreamcast/"
+
     chown -R $user:$user "$md_conf_root/dreamcast"
 
     cat > "$romdir/dreamcast/+Start Reicast.sh" << _EOF_
@@ -94,10 +93,10 @@ _EOF_
     # add system
     # possible audio backends: alsa, oss, omx
     if isPlatform "rpi"; then
-        addEmulator 1 "${md_id}-audio-omx" "dreamcast" "CON:$md_inst/bin/reicast.sh omx %ROM%"
-        addEmulator 0 "${md_id}-audio-oss" "dreamcast" "CON:$md_inst/bin/reicast.sh oss %ROM%"
+        addEmulator 0 "${md_id}-audio-omx" "dreamcast" "CON:$md_inst/bin/reicast.sh omx %ROM%"
+        addEmulator 1 "${md_id}-audio-alsa" "dreamcast" "CON:$md_inst/bin/reicast.sh alsa %ROM%"
     else
-        addEmulator 1 "$md_id" "dreamcast" "CON:$md_inst/bin/reicast.sh oss %ROM%"
+        addEmulator 1 "$md_id" "dreamcast" "CON:$md_inst/bin/reicast.sh alsa %ROM%"
     fi
     addSystem "dreamcast"
 
